@@ -1,0 +1,222 @@
+---
+title: "Final Project"
+author: "Tanguy Marie"
+date: "31/03/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+The idea would be to explore this very famous dataset that stores the average prices of avocados throughout the year 2015, 2016, 2017 and some of the 2018 year.
+
+# Presentation and Description of the problem
+
+What I would like to do is see whether or not I would be able to predict the average prices of the avocados for the year 2018, using as training for my model, the years 2015, 2016 and 2017.
+The technique that I would be using is the Linear Regression Model as well as the MSE and RMSE to see if my model is accurate enough.
+
+#Presentation of the data
+
+This dataset is composed of 14 columns, which are :
+  - The Index (X) which works like an identifier 
+  - The date of observation (Date)
+  - The Average Price
+  - The Total Volume sold
+  - 4046 (size of the Hass)
+  - 4225 (size of the Hass)
+  - 4770 (size of the Hass)
+  - Total Bags (sum of small and big bags)
+  - Small Bags
+  - Large Bags
+  - Extra Large Bags
+  - Type (whether conventional or organic)
+  - The year 
+  - The region or city (Region) of observation
+
+This is dataset that has 18 249 rows that represent the differnt obeservations
+We will then see the dataset using the r functions
+
+## Importing
+
+```{r, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+
+avoc <- read.csv("avocado.csv")
+```
+
+## Inspecting the file
+
+
+```{r}
+head(avoc)
+tail(avoc)
+summary(avoc)
+
+sum(is.null(avoc)) #dataset has no null values that could have been missing values
+sum(is.na(avoc))#No NA values as well
+```
+## Modifying the dataset
+### Deleting the X column that is useles
+### Renaming the X4046, X4225 and X4770 columns
+
+```{r}
+avoc$X <- NULL #removing X column
+head(avoc)
+
+colnames(avoc)[4] <- "Small.Hass" #These names are the description given in the avocado dataset on Kaggle
+colnames(avoc)[5] <- "Large.Hass"
+colnames(avoc)[6] <- "Extra-Large.Hass"
+```
+
+## Preparing for analysis
+### We want to study avocados' prices according to :
+  - The year (already in df)
+  - The months
+  - The seasons
+
+```{r}
+avoc$Month <- format(as.Date(avoc$Date), "%m") #Create a column and return the month number 
+avoc$Season <- seq(0, nrow(avoc)-1)#Creating a Season column in df
+
+avoc$Month <- as.numeric(avoc$Month) #Changing character variable into numerical one
+
+for (i in 1:nrow(avoc)){
+  if (avoc$Month[i] == 1){ #We will be using month to approximate the season as it is easier than using the Date column
+    avoc$Season[i] <- "Winter"
+  }
+  if (avoc$Month[i] == 2){ 
+    avoc$Season[i] <- "Winter"
+  }
+  if (avoc$Month[i] == 3){ 
+    avoc$Season[i] <- "Winter"
+  }
+  if (avoc$Month[i] == 4){ 
+    avoc$Season[i] <- "Summer"
+  }
+  if (avoc$Month[i] == 5){ 
+    avoc$Season[i] <- "Summer"
+  }
+  if (avoc$Month[i] == 6){ 
+    avoc$Season[i] <- "Summer"
+  }
+  if (avoc$Month[i] == 7){ 
+    avoc$Season[i] <- "Summer"
+  }
+  if (avoc$Month[i] == 8){ 
+    avoc$Season[i] <- "Spring"
+  }
+  if (avoc$Month[i] == 9){ 
+    avoc$Season[i] <- "Spring"
+  }
+  if (avoc$Month[i] == 10){ 
+    avoc$Season[i] <- "Spring"
+  }
+  if (avoc$Month[i] == 11){ 
+    avoc$Season[i] <- "Automn"
+  }
+  if (avoc$Month[i] == 12){ 
+    avoc$Season[i] <- "Automn"
+  }
+}
+
+#I tried using a for loop with 4 vectors %in% c(1,2,3), c(4,5,6),... instead of 12 ifs
+#However it did not work out, so I used a more exhaustive approach
+```
+## Changing the column names and reordering them to better the important ones
+
+```{r}
+colnames(avoc) <-  c("Date", "Average_Price","Total_Amount", "Small_Hass", "Large_Hass", "Extra-Large_Hass", "Total_Bags", "Small_Bags", "Large_Bags", "XLarge_Bags", "Type", "Year", "Region", "Month", "Season")
+
+colnames(avoc) #Getting their name to reorder
+
+avoc <- avoc[, c(2,14,15,12,3,4,5,6,13,11,1,7,8,9,10)]
+
+view(avoc)
+```
+# Visualization of the data and EDA
+## We want to see the relationship between the variables, now that our data is fully prepared
+## Let's start with the  average compared to the total amount sold, considering the type of avocado for each year
+
+```{r}
+ggplot(data = avoc) + geom_point(mapping = aes(Average_Price, y = Total_Amount, color = Type)) + facet_grid(.~ Year)
+
+```
+
+## Then let's move on to the seasonality of these sells
+
+```{r}
+ggplot(data = avoc) + geom_point(mapping = aes(x = Average_Price, y = Total_Amount, color = Type)) + facet_grid(.~ Season)
+```
+
+## Results
+  - It seems that most quantities of avocados are sold when the price is low
+  - Organic avocados don't seem to follow a particular law as their representation is uniform
+  - Concerning the seasonality, avocados seem to be cheaper in Summer, where they get the most sells (whereas it is the worst season for consuming them)
+  - Its price will go slightly higher during Winter, and its sells will still be high
+
+# The Linear Regression Model
+## We will focus ourselves on the conventional avocados, as the organic ones do not seem to follow any seasonality or big chance in price as they are unirformally distributed on our graphs
+
+```{r}
+avoc_train <- avoc %>%
+  filter(Type == "conventional", Year < 2018)
+
+avoc_test <- avoc %>%
+  filter(Type == "conventional", Year >= 2018)
+
+avoc_lm <- lm(Average_Price~Total_Amount, data = avoc_train)
+
+ggplot(avoc_train, aes(x = Average_Price, y =  Total_Amount)) + geom_point(shape = 19, color = "red") + geom_smooth(method = "lm", se = FALSE)
+
+summary(avoc_lm)#We can now see that the p-value < 0.05
+```
+## The prices seem to go down, so we will test our hypothesis on the 2018 data
+## We will be using the mean square error to determine whether or not our regression is correct
+
+```{r}
+avoc_forecast <- predict(avoc_lm, newdata = avoc_test)
+
+plot(avoc_test$Average_Price, col="red") + lines(avoc_forecast, col = "blue") #Compare our predictions to the actual values
+```
+## Now we compute the error
+
+```{r}
+MSE <- 0
+e <- 0
+for (j in length(avoc_test)){
+  e <- (avoc_test$Average_Price - avoc_forecast)^2
+  MSE <- MSE + e
+}
+sum(MSE) #That is the sum of our errors squared
+RSME <- (sqrt(sum(MSE)))
+RSME #That is the sum of our errors in absolute value
+RSME/length(avoc_test)#That is the average error we have on every avocados sold in 2018
+
+length(avoc_forecast)/length(avoc$Average_Price)*100 #The proportion that the 2018 values represent in all of our data
+```
+
+# Conclusion
+## We have studied the price evolution of avocados according to these criterion :
+  - The year they were sold
+  - The amount of them that were sold
+  - The seasonality
+
+## We have noticed that :
+  - Most avocados are sold when their price is low
+  - A major part of them are sold during their season (late automn to early spring)
+  - However, most of them are sold during the summer at a fairly low price whereas they should not
+  - Their price tends to lower throughout the years
+  
+## Therefore, we have decided to test whether or not we would be able to predict their prices for the year 2018 using a simple LRM (for the conventional avocados)
+##What we have gotten thus far is :
+  - a p-value low enough to validate our hypothesis concerning the amount of avocados sold and their avearge price
+  - A linear model with the values of 2015, 2016 and 2017 as train and the values of 2018 as a test
+  - A RSME of 5.23
+  - A RSME/value of 0.35 which means that, on average, we have miscalculated the price of the avocados of 0.35euro, comparing to the real values
+  - We could have improved this model by having a more significant pool of data to test (only 3.5% of the total data)
